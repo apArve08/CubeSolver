@@ -129,8 +129,25 @@ h1 .tick{color:var(--y)}
 .counter{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.1em}
 .done-banner{background:linear-gradient(90deg,var(--g),#0e8f52);color:#06231a;font-weight:650;text-align:center;padding:14px;border-radius:12px;font-size:15px}
 .hidden{display:none !important}
-.legend{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.8;margin-top:10px}
-.legend b{color:var(--muted);font-weight:600}
+.diagwrap{display:flex;gap:14px;align-items:center;margin:6px 0 2px}
+.diagwrap svg{flex:0 0 auto}
+.bigcol{min-width:0}
+.legend{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.legend summary{font-size:13px;font-weight:600;cursor:pointer;list-style:none;color:var(--muted)}
+.legend summary::-webkit-details-marker{display:none}
+.legend summary:before{content:'＋ ';color:var(--y)}
+.legend[open] summary:before{content:'－ '}
+.legendgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.lg{text-align:center}
+.lg .cap{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+.lg .sub{font-size:10.5px;color:var(--dim)}
+.scandiag{display:flex;gap:14px;align-items:center;background:var(--panel2);border-radius:12px;padding:12px;margin:10px 0 12px}
+.scandiag .txt{font-size:13px;line-height:1.5;color:var(--muted)}
+.scandiag .txt b{color:var(--ink);display:block;font-size:13.5px;margin-bottom:3px}
+.intro{font-size:13.5px;color:var(--muted);line-height:1.55}
+.intro ol{margin:8px 0 0;padding-left:18px}
+.intro li{margin-bottom:4px}
+.warn{font-size:12.5px;color:var(--y);margin-top:10px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -143,10 +160,22 @@ h1 .tick{color:var(--y)}
 
   <!-- ============ SCAN ============ -->
   <section id="scanView">
+    <details class="card" id="introCard" open>
+      <summary style="font-size:15px;font-weight:600;cursor:pointer;list-style:none">Never solved one before? Start here</summary>
+      <div class="intro" style="margin-top:10px">
+        You do not need to know anything about cubes. Three things happen:
+        <ol>
+          <li><b>You photograph all six sides.</b> The app works out where every colour is.</li>
+          <li><b>You check it got them right.</b> Tap any square that looks wrong and fix it.</li>
+          <li><b>You follow the moves.</b> One at a time, with a picture of exactly which part to turn and which way.</li>
+        </ol>
+        <div class="warn">Do not turn the cube at all until the app tells you to. Even one twist between now and the end will throw the whole thing off.</div>
+      </div>
+    </details>
     <div class="card">
       <div class="hint" id="scanCount">Face 1 of 6</div>
       <h2 id="scanTitle">Front face</h2>
-      <p id="scanHow">Pick any side to be the front and hold it toward the camera. Whatever face is on top now stays on top for the next three captures.</p>
+      <div class="scandiag"><div id="scanSvg"></div><div class="txt" id="scanHow"></div></div>
       <div class="camstage" id="camstage">
         <div class="camoff" id="camoff">Camera is off. Turn it on, or enter the colours by hand.</div>
         <video id="video" playsinline muted class="hidden"></video>
@@ -172,7 +201,9 @@ h1 .tick{color:var(--y)}
   <section id="checkView" class="hidden">
     <div class="card">
       <h2>Check the colours</h2>
-      <p>Tap a colour, then tap any square to fix it. Centres are outlined — they set what each face should end up as.</p>
+      <p>This is your cube unfolded flat, like a cardboard box cut open. Compare it against the real thing.
+       To fix a square: tap a colour below, then tap the square. The nine squares with a ring around them are the middle of each face —
+       those never move on a real cube, so they decide what colour each side ends up.</p>
       <div class="net" id="net"></div>
       <div class="pal" id="pal"></div>
       <div class="msg" id="checkMsg"></div>
@@ -191,28 +222,35 @@ h1 .tick{color:var(--y)}
     <div class="card">
       <div class="hint" id="holdHint"></div>
       <div class="stage3d" id="stage3d"><div class="cube" id="cube"><div id="gStatic"></div><div id="gLayer"></div></div></div>
-      <div class="turnline">
-        <span class="bigmove" id="bigMove">—</span>
-        <em id="moveWords"></em>
+      <div class="diagwrap">
+        <div id="moveSvg"></div>
+        <div class="bigcol">
+          <div class="bigmove" id="bigMove">—</div>
+          <em id="moveWords" style="font-style:normal;font-size:13px;color:var(--muted);display:block;margin-top:4px"></em>
+        </div>
       </div>
       <div class="ticker" id="ticker"></div>
       <div class="row" style="margin-top:6px">
         <button class="btn" id="prevBtn">Back</button>
-        <button class="btn primary" id="nextBtn" style="flex:1">Next move</button>
-        <button class="btn" id="autoBtn">Auto</button>
+        <button class="btn primary" id="nextBtn" style="flex:1">Done — next move</button>
+        <button class="btn" id="autoBtn" title="Play the moves by itself">Watch</button>
       </div>
       <div class="row" style="margin-top:8px;align-items:center">
         <span class="counter" id="counter"></span>
         <span style="flex:1"></span>
-        <button class="btn" id="restartBtn">Start over</button>
+        <button class="btn" id="restartBtn">Back to move 1</button>
       </div>
-      <div id="doneBanner" class="done-banner hidden" style="margin-top:12px">Solved. Nice work.</div>
-      <div class="legend">
-        <b>How to read a move.</b><br>
-        R L U D F B = turn the right, left, top, bottom, front or back face.<br>
-        Plain letter = clockwise, looking straight at that face.<br>
-        ' = anticlockwise &nbsp;·&nbsp; 2 = half turn.
-      </div>
+      <div id="doneBanner" class="done-banner hidden" style="margin-top:12px">Solved. Every side is one colour — go check the real cube.</div>
+      <details class="legend">
+        <summary>What do the letters mean?</summary>
+        <p style="font-size:13px;color:var(--muted);line-height:1.55;margin:10px 0 0">
+          Every diagram below shows the cube <b>facing you</b>, the same way you are holding it.
+          The shaded part is the slice that turns, and the arrow is the way it goes.
+          A tick mark after the letter (like R&rsquo;) means the same slice, opposite way.
+          A 2 means turn it twice.
+        </p>
+        <div class="legendgrid" id="legendGrid"></div>
+      </details>
     </div>
 
     <div class="card" id="stageList"></div>
@@ -510,17 +548,110 @@ let paint = 'w';
 let selected = -1;
 let unsure = new Set();
 
+
+/* ========================================================================
+   3b. DIAGRAMS — every picture shows the cube facing you
+   ======================================================================== */
+const AC='#FFD400', DIM='#3A3E47', LIT='#5A6070', TXT='#8B909B';
+function head(x,y,ang,sz,col){
+  const bx=x-Math.cos(ang)*sz, by=y-Math.sin(ang)*sz;
+  const px=-Math.sin(ang)*sz*0.6, py=Math.cos(ang)*sz*0.6;
+  return '<polygon points="'+x.toFixed(1)+','+y.toFixed(1)+' '+(bx+px).toFixed(1)+','+(by+py).toFixed(1)+' '+(bx-px).toFixed(1)+','+(by-py).toFixed(1)+'" fill="'+col+'"/>';
+}
+function straight(x1,y1,x2,y2,col,w){
+  const ang=Math.atan2(y2-y1,x2-x1), sz=w*2.6;
+  const ex=x2-Math.cos(ang)*sz, ey=y2-Math.sin(ang)*sz;
+  return '<line x1="'+x1+'" y1="'+y1+'" x2="'+ex.toFixed(1)+'" y2="'+ey.toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round"/>'+head(x2,y2,ang,sz,col);
+}
+function arcArrow(cx,cy,r,a0,a1,col,w){
+  const cw = a1>a0;
+  const x0=cx+r*Math.cos(a0), y0=cy+r*Math.sin(a0);
+  const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+  const large=Math.abs(a1-a0)>Math.PI?1:0;
+  const tang=a1+(cw?Math.PI/2:-Math.PI/2);
+  return '<path d="M'+x0.toFixed(1)+' '+y0.toFixed(1)+' A'+r+' '+r+' 0 '+large+' '+(cw?1:0)+' '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round"/>'+head(x1,y1,tang,w*2.6,col);
+}
+/* a 3x3 face seen head-on, with one row/column/whole face lit */
+function moveDiagram(mv, S){
+  S = S || 116;
+  const k = S/116;                 // scale factor
+  const cell=26*k, gap=4*k, pad=16*k;
+  const face=mv[0], prime=mv.indexOf("'")>-1, half=mv.indexOf('2')>-1;
+  const lit = {R:c=>c===2, L:c=>c===0, U:r=>r===0, D:r=>r===2};
+  let g='';
+  for(let r=0;r<3;r++) for(let c=0;c<3;c++){
+    let on=false;
+    if(face==='R'||face==='L') on=lit[face](c);
+    else if(face==='U'||face==='D') on=lit[face](r);
+    else on = (face==='F');
+    const x=pad+c*(cell+gap), y=pad+r*(cell+gap);
+    g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+cell.toFixed(1)+'" height="'+cell.toFixed(1)+'" rx="'+(5*k).toFixed(1)+'" fill="'+(on?LIT:DIM)+'"'+(face==='B'?' stroke="'+DIM+'" stroke-dasharray="3 3"':'')+'/>';
+  }
+  const gL=pad, gR=pad+3*cell+2*gap, gT=pad, gB=pad+3*cell+2*gap, mid=(gL+gR)/2;
+  const w=4.5*k, off=11*k;
+  // R turns the right column up; L turns the left column down;
+  // U sends the top row left;  D sends the bottom row right.  Reverse for '.
+  if(face==='R') g += prime ? straight(gR+off,gT,gR+off,gB,AC,w) : straight(gR+off,gB,gR+off,gT,AC,w);
+  if(face==='L') g += prime ? straight(gL-off,gB,gL-off,gT,AC,w) : straight(gL-off,gT,gL-off,gB,AC,w);
+  if(face==='U') g += prime ? straight(gL,gT-off,gR,gT-off,AC,w) : straight(gR,gT-off,gL,gT-off,AC,w);
+  if(face==='D') g += prime ? straight(gR,gB+off,gL,gB+off,AC,w) : straight(gL,gB+off,gR,gB+off,AC,w);
+  if(face==='F') g += prime ? arcArrow(mid,mid,30*k, 1.5,-2.3,AC,w) : arcArrow(mid,mid,30*k,-2.3,1.5,AC,w);
+  if(face==='B') g += prime ? arcArrow(mid,mid,30*k,-2.3,1.5,AC,w) : arcArrow(mid,mid,30*k, 1.5,-2.3,AC,w);
+  if(half) g += '<text x="'+(gR-2*k)+'" y="'+(gB+14*k)+'" font-family="ui-monospace,monospace" font-size="'+(15*k)+'" font-weight="700" fill="'+AC+'" text-anchor="end">x2</text>';
+  return '<svg width="'+S+'" height="'+S+'" viewBox="0 0 '+S+' '+S+'" role="img" aria-label="'+moveWords(mv)+'">'+g+'</svg>';
+}
+function moveWords(mv){
+  const f=mv[0], prime=mv.indexOf("'")>-1, half=mv.indexOf('2')>-1;
+  const where={R:'right column',L:'left column',U:'top row',D:'bottom row',F:'whole face toward you',B:'whole face away from you'}[f];
+  if(half){
+    if(f==='F') return 'Turn the face nearest you all the way round — half a turn.';
+    if(f==='B') return 'Turn the far face all the way round — half a turn.';
+    return 'Move the '+where+' all the way round — half a turn.';
+  }
+  const dir={
+    R: prime?'down':'up', L: prime?'up':'down',
+    U: prime?'to the right':'to the left', D: prime?'to the left':'to the right',
+    F: prime?'anticlockwise':'clockwise', B: prime?'clockwise as you see it':'anticlockwise as you see it',
+  }[f];
+  if(f==='F') return 'Turn the face nearest you '+dir+'.';
+  if(f==='B') return 'Turn the far face '+dir+' (it looks backwards from here).';
+  return 'Move the '+where+' '+dir+'.';
+}
+/* small cube drawn in 3D, used for the scanning steps */
+function cubeDiagram(kind){
+  const F='M30 48 L88 48 L88 106 L30 106 Z';
+  const T='M30 48 L88 48 L112 28 L54 28 Z';
+  const R='M88 48 L112 28 L112 86 L88 106 Z';
+  let g='<path d="'+T+'" fill="#31353E"/><path d="'+R+'" fill="#272A31"/><path d="'+F+'" fill="'+AC+'" opacity=".9"/>';
+  g+='<path d="'+F+'" fill="none" stroke="#16171B" stroke-width="2"/>';
+  for(const t of [1,2]){
+    g+='<line x1="'+(30+58*t/3)+'" y1="48" x2="'+(30+58*t/3)+'" y2="106" stroke="#16171B" stroke-width="2"/>';
+    g+='<line x1="30" y1="'+(48+58*t/3)+'" x2="88" y2="'+(48+58*t/3)+'" stroke="#16171B" stroke-width="2"/>';
+  }
+  g+='<text x="59" y="122" font-family="system-ui" font-size="11" fill="'+TXT+'" text-anchor="middle">to camera</text>';
+  if(kind==='turn') g+=arcArrow(71,20,34,0.55,2.6,AC,4.5);
+  if(kind==='tipdown') g+=arcArrow(124,72,30,-1.35,0.9,AC,4.5);
+  if(kind==='tipup') g+=arcArrow(124,72,30,0.9,-1.35,AC,4.5);
+  return '<svg width="140" height="130" viewBox="0 0 150 130" aria-hidden="true">'+g+'</svg>';
+}
+
 /* ========================================================================
    4. SCANNING
    ======================================================================== */
 const SCAN_ORDER = ['F','R','B','L','U','D'];
 const SCAN_COPY = {
-  F:{t:'Front face', h:'Pick any side to be the front and hold it flat to the camera. Remember which face is on top — it stays on top for the next three.'},
-  R:{t:'Right face', h:'Turn the cube to the left so the face that was on your right now faces the camera. Same face still on top.'},
-  B:{t:'Back face',  h:'Keep turning the same way. Same face still on top.'},
-  L:{t:'Left face',  h:'Keep turning the same way once more. Same face still on top.'},
-  U:{t:'Top face',   h:'Go back to the front face, then tip the cube toward you so the top face meets the camera. The back face is now on top.'},
-  D:{t:'Bottom face',h:'From the front face again, tip the cube away from you so the bottom meets the camera. The front face is now on top.'},
+  F:{t:'Front face', d:'first',
+     h:'<b>Pick any side. That one is now the front.</b>Hold it flat to the camera so it fills the square. Take note of which colour is sitting on top right now — it has to stay on top for the next three photos.'},
+  R:{t:'Right face', d:'turn',
+     h:'<b>Spin the cube to the left, like a doorknob.</b>The side that was on your right now faces the camera. Do not tip it — the same colour stays on top.'},
+  B:{t:'Back face', d:'turn',
+     h:'<b>Spin it the same way again.</b>You are now looking at the side that was pointing away from you. Same colour still on top.'},
+  L:{t:'Left face', d:'turn',
+     h:'<b>Spin it the same way one more time.</b>Last of the four sides. Same colour still on top.'},
+  U:{t:'Top face', d:'tipdown',
+     h:'<b>Spin once more to get back to the front, then tip the cube toward you.</b>The face that was on top now looks at the camera.'},
+  D:{t:'Bottom face', d:'tipup',
+     h:'<b>Tip it back up, then tip it away from you instead.</b>The bottom face now looks at the camera. Last one.'},
 };
 let scanIdx = 0;
 let samples = {};   // face -> [9 x [r,g,b]]
@@ -668,7 +799,8 @@ function updateScanCopy(){
   const f=SCAN_ORDER[scanIdx];
   $('scanCount').textContent='Face '+(scanIdx+1)+' of 6';
   $('scanTitle').textContent=SCAN_COPY[f].t;
-  $('scanHow').textContent=SCAN_COPY[f].h;
+  $('scanHow').innerHTML=SCAN_COPY[f].h;
+  $('scanSvg').innerHTML=cubeDiagram(SCAN_COPY[f].d);
   $('backBtn').disabled = scanIdx===0;
   $('capBtn').textContent = 'Capture '+SCAN_COPY[f].t.toLowerCase().replace(' face','');
   renderFaceChips();
@@ -833,22 +965,28 @@ function turnAxisCSS(face){ const n=NRM_OF[face]; return n[0]+','+(-n[1])+','+n[
    ======================================================================== */
 const STAGE_INFO = [
   null,
-  {t:'Bottom cross', d:'Build a cross on the bottom face. Each of those four edge pieces also has a side colour, and that side colour has to line up with the matching centre. This part is pure intuition — no algorithm to memorise.'},
-  {t:'Bottom corners', d:'Get each bottom corner above the gap it belongs in, then repeat R U R\u2019 U\u2019 until it drops in. One, three or five repeats — just keep going until it lands.'},
-  {t:'Middle layer', d:'Two layers done. Find a top edge with no top colour on it, line it up with its centre, then send it left or right into its slot.'},
-  {t:'Top cross', d:'Flip the top edges so a cross appears on the top face. One algorithm, F R U R\u2019 U\u2019 F\u2019, run up to three times. Dot, then L shape, then line, then cross.'},
-  {t:'Whole top face', d:'Twist the top corners so the whole top face is one colour. The sune algorithm does it — the rest of the cube looks wrecked mid-way and comes back at the end.'},
-  {t:'Last corners', d:'The top face is one colour but the corners may be in the wrong spots. This algorithm rotates three of them around, leaving one where it is.'},
-  {t:'Last edges', d:'Only the top edges are left. One three-way swap, maybe twice, and the cube is done.'},
+  {t:'Bottom cross',
+   d:'Make a plus sign on the bottom face. Four pieces, each with two colours — the bottom colour goes down, and the other colour has to match the middle square of the side it touches. There is nothing to memorise here, you just move them into place.',
+   look:'Look for: a plus shape underneath, and four side colours that match their middles.'},
+  {t:'Bottom corners',
+   d:'Now fill the four bottom corners. Get the corner piece sitting on the top layer directly above the hole it belongs in, then repeat the same short sequence until it drops in. It may take one go, or three, or five — keep going, it always lands.',
+   look:'Look for: the whole bottom layer finished, one solid colour underneath.'},
+  {t:'Middle layer',
+   d:'Two layers down. Find a top-layer edge piece that has no top colour on it, turn the top until its front colour matches the middle square below it, then send it left or right into the gap.',
+   look:'Look for: the top two rows of every side matching their middles.'},
+  {t:'Top cross',
+   d:'Ignore the corners completely for now. One sequence flips the top edges. Run it and you go from a dot, to an L shape, to a line, to a cross. Just keep running it — the app lines the cube up for you each time.',
+   look:'Look for: a plus sign of the top colour on the top face.'},
+  {t:'Whole top face',
+   d:'Now twist the corners so the entire top face is one colour. Halfway through this the cube looks completely ruined. It is not — finish the sequence and everything comes back.',
+   look:'Look for: the top face all one colour. The sides will still be a mess.'},
+  {t:'Last corners',
+   d:'The top is one colour, but the corner pieces may be sitting in the wrong spots. This sequence swaps three of them around in a circle, leaving the fourth alone.',
+   look:'Look for: every corner between the two side colours it actually belongs between.'},
+  {t:'Last edges',
+   d:'Only the four top edges are out of place. One three-way swap, sometimes twice, and you are done.',
+   look:'Look for: a solved cube.'},
 ];
-const MOVE_WORDS = {
-  U:'top layer, clockwise', "U'":'top layer, anticlockwise', U2:'top layer, half turn',
-  D:'bottom layer, clockwise from below', "D'":'bottom layer, anticlockwise from below', D2:'bottom layer, half turn',
-  R:'right face, clockwise', "R'":'right face, anticlockwise', R2:'right face, half turn',
-  L:'left face, clockwise from the left', "L'":'left face, anticlockwise from the left', L2:'left face, half turn',
-  F:'front face, clockwise', "F'":'front face, anticlockwise', F2:'front face, half turn',
-  B:'back face, clockwise from behind', "B'":'back face, anticlockwise from behind', B2:'back face, half turn',
-};
 let plan=null, flatMoves=[], cursor=0, liveColors=null, animating=false, autoTimer=null;
 
 function buildPlan(steps){
@@ -869,6 +1007,8 @@ function renderStageList(){
     div.appendChild(h);
     if(sN===curStage){
       const d=document.createElement('div'); d.className='d'; d.textContent=STAGE_INFO[sN].d; div.appendChild(d);
+      const lk=document.createElement('div'); lk.className='d'; lk.style.color='var(--y)'; lk.style.marginTop='6px';
+      lk.textContent=STAGE_INFO[sN].look; div.appendChild(lk);
       stepsIn.forEach(o=>{
         const p=document.createElement('div');
         p.className='substep'+(o.i===curSi?' act':'');
@@ -892,17 +1032,21 @@ function renderPlayer(){
   if(cursor<flatMoves.length){
     const m=flatMoves[cursor].m;
     $('bigMove').textContent=m;
-    $('moveWords').textContent=MOVE_WORDS[m]||'';
+    $('moveWords').textContent=moveWords(m);
+    $('moveSvg').innerHTML=moveDiagram(m);
     $('doneBanner').classList.add('hidden');
     $('nextBtn').disabled=false;
   }else{
     $('bigMove').textContent='✓';
-    $('moveWords').textContent='every face one colour';
+    $('moveWords').textContent='Every face is one colour.';
+    $('moveSvg').innerHTML='';
     $('doneBanner').classList.remove('hidden');
     $('nextBtn').disabled=true;
     stopAuto();
   }
-  $('counter').textContent='Move '+Math.min(cursor+1,flatMoves.length)+' of '+flatMoves.length;
+  $('counter').textContent = cursor>=flatMoves.length
+    ? 'All '+flatMoves.length+' moves done'
+    : 'Move '+(cursor+1)+' of '+flatMoves.length+' · make this turn, then tap Done';
   $('prevBtn').disabled = cursor===0;
   renderStageList();
 }
@@ -933,12 +1077,12 @@ function doMove(forward){
   setTimeout(()=>{ if(animating) finish(); }, 460);
 }
 function invMove(m){ return m.endsWith("'") ? m.slice(0,-1) : (m.endsWith('2') ? m : m+"'"); }
-function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; $('autoBtn').textContent='Auto'; } }
+function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; $('autoBtn').textContent='Watch'; } }
 $('nextBtn').onclick=()=>doMove(true);
 $('prevBtn').onclick=()=>{ stopAuto(); doMove(false); };
 $('autoBtn').onclick=()=>{
   if(autoTimer){ stopAuto(); return; }
-  $('autoBtn').textContent='Pause';
+  $('autoBtn').textContent='Stop';
   autoTimer=setInterval(()=>{ if(cursor>=flatMoves.length){ stopAuto(); return; } doMove(true); }, 620);
 };
 $('restartBtn').onclick=()=>{ stopAuto(); cursor=0; liveColors=colors.slice(); render3D(liveColors,null); renderPlayer(); };
@@ -980,12 +1124,23 @@ $('solveBtn').onclick=()=>{
     if(res.error){ const m=$('checkMsg'); m.className='msg bad'; m.textContent=res.error; return; }
     plan=res; buildPlan(res.steps); cursor=0; liveColors=colors.slice();
     const down=colors[FACE_ORDER.indexOf('D')*9+4], front=colors[FACE_ORDER.indexOf('F')*9+4];
-    $('holdHint').textContent='Hold it: '+COL[front].name+' facing you, '+COL[down].name+' underneath';
+    $('holdHint').innerHTML='Hold it this way the whole time &mdash; <span style="color:var(--ink)">'+COL[front].name+' facing you, '+COL[down].name+' underneath</span>';
     goLearn();
     render3D(liveColors,null);
     renderPlayer();
   }, 30);
 };
+
+/* legend of the six turns */
+(function(){
+  const el=$('legendGrid');
+  [['R','right column up'],['L','left column down'],['U','top row left'],
+   ['D','bottom row right'],['F','near face clockwise'],['B','far face, from behind']].forEach(([m,cap])=>{
+    const d=document.createElement('div'); d.className='lg';
+    d.innerHTML=moveDiagram(m,84)+'<div class="cap">'+m+'</div><div class="sub">'+cap+'</div>';
+    el.appendChild(d);
+  });
+})();
 
 /* boot */
 renderFaceChips(); updateScanCopy();
