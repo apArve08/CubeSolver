@@ -57,7 +57,16 @@ h1 .tick{color:var(--y)}
 .camstage video{width:100%;height:100%;object-fit:cover}
 .camstage.mirror video{transform:scaleX(-1)}
 .grid9{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);pointer-events:none}
-.grid9 i{border:2px solid rgba(255,255,255,.75);border-radius:8px;margin:12%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.grid9 i{border:2px solid rgba(255,255,255,.8);border-radius:8px;margin:11%;box-shadow:0 0 0 1px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.grid9 i b{display:block;width:46%;height:46%;border-radius:50%;background:transparent;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.capflash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.capflash.go{animation:fl .32s ease-out}
+@keyframes fl{from{opacity:.75}to{opacity:0}}
+.status{font-size:13px;text-align:center;margin-top:10px;min-height:18px;color:var(--muted)}
+.status.ok{color:var(--g)}
+.status.bad{color:#FF8A80}
+.fchip{cursor:pointer}
+.fchip.got .mini{border-color:var(--g)}
 .camoff{color:var(--dim);font-size:13px;text-align:center;padding:24px}
 
 /* face chips */
@@ -75,6 +84,7 @@ h1 .tick{color:var(--y)}
 .net .cell.st{cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.45)}
 .net .cell.st.sel{box-shadow:inset 0 0 0 2px var(--ink)}
 .net .cell.ctr{box-shadow:inset 0 0 0 2px rgba(0,0,0,.55), inset 0 0 0 4px rgba(255,255,255,.25)}
+.net .cell.ask{box-shadow:inset 0 0 0 2px #16171B, inset 0 0 0 4px #FFD400}
 .pal{display:flex;gap:8px;justify-content:center;margin-top:14px}
 .pal button{width:38px;height:38px;border-radius:9px;border:2px solid transparent}
 .pal button.on{border-color:var(--ink)}
@@ -140,9 +150,10 @@ h1 .tick{color:var(--y)}
       <div class="camstage" id="camstage">
         <div class="camoff" id="camoff">Camera is off. Turn it on, or enter the colours by hand.</div>
         <video id="video" playsinline muted class="hidden"></video>
-        <div class="grid9 hidden" id="grid9"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="grid9 hidden" id="grid9"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+        <div class="capflash" id="capflash"></div>
       </div>
-      <div class="hint" style="margin-top:10px">Fill the square with one face · even light · no glare</div>
+      <div class="status" id="capStatus">Fill the square with one face. The dots show what the camera is reading.</div>
       <div class="faces" id="faceChips"></div>
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="camBtn">Turn on camera</button>
@@ -497,6 +508,7 @@ const COL_KEYS = ['w','y','r','o','b','g'];
 let colors = new Array(54).fill(null);      // 'w'|'y'|... or null
 let paint = 'w';
 let selected = -1;
+let unsure = new Set();
 
 /* ========================================================================
    4. SCANNING
@@ -525,34 +537,45 @@ async function startCamera(){
     video.classList.remove('hidden'); $('grid9').classList.remove('hidden'); $('camoff').classList.add('hidden');
     $('camBtn').textContent = 'Camera on'; $('camBtn').disabled = true;
     $('capBtn').disabled = false;
+    startLive(); setStatus('Reading. Fill the square with one face, then capture.','');
   }catch(e){
     $('camoff').textContent = 'Could not open the camera — ' + (e.name||'blocked') + '. Enter the colours by hand instead.';
   }
 }
+const SMALL = 96, PATCH = 12;
 function sampleFace(){
   const w = video.videoWidth, h = video.videoHeight;
   if(!w) return null;
   const side = Math.min(w,h);
   const ox = (w-side)/2, oy = (h-side)/2;
-  cnv.width = w; cnv.height = h;
+  cnv.width = SMALL; cnv.height = SMALL;
   const ctx = cnv.getContext('2d', {willReadFrequently:true});
-  ctx.drawImage(video,0,0);
+  ctx.setTransform(1,0,0,1,0,0);
+  if(mirrored){ ctx.translate(SMALL,0); ctx.scale(-1,1); }
+  ctx.drawImage(video, ox, oy, side, side, 0, 0, SMALL, SMALL);
+  ctx.setTransform(1,0,0,1,0,0);
+  const d = ctx.getImageData(0,0,SMALL,SMALL).data;
   const out=[];
   for(let r=0;r<3;r++) for(let c=0;c<3;c++){
-    const cx = ox + side*(c+0.5)/3, cy = oy + side*(r+0.5)/3;
-    const box = Math.round(side/18);
-    const d = ctx.getImageData(Math.round(cx-box/2), Math.round(cy-box/2), box, box).data;
+    const x0=Math.round((c+0.5)*SMALL/3 - PATCH/2), y0=Math.round((r+0.5)*SMALL/3 - PATCH/2);
     let R=0,G=0,B=0,n=0;
-    for(let i=0;i<d.length;i+=4){ R+=d[i];G+=d[i+1];B+=d[i+2];n++; }
+    for(let y=y0;y<y0+PATCH;y++) for(let x=x0;x<x0+PATCH;x++){
+      const i=(y*SMALL+x)*4; R+=d[i]; G+=d[i+1]; B+=d[i+2]; n++;
+    }
     out.push([R/n, G/n, B/n]);
-  }
-  if(mirrored){
-    const m=[];
-    for(let r=0;r<3;r++) m.push(out[r*3+2], out[r*3+1], out[r*3+0]);
-    return m;
   }
   return out;
 }
+let liveTimer=null;
+function startLive(){
+  stopLive();
+  liveTimer=setInterval(()=>{
+    const s=sampleFace(); if(!s) return;
+    const dots=$('grid9').querySelectorAll('b');
+    for(let i=0;i<9;i++) dots[i].style.background='rgb('+s[i].map(v=>Math.round(v)).join(',')+')';
+  }, 180);
+}
+function stopLive(){ if(liveTimer){ clearInterval(liveTimer); liveTimer=null; } }
 function feat(rgb){
   const [R,G,B]=rgb, s=R+G+B+1e-6;
   const mx=Math.max(R,G,B), mn=Math.min(R,G,B);
@@ -562,30 +585,44 @@ function feat(rgb){
 function dist(a,b){ let d=0; for(let i=0;i<4;i++){const t=a[i]-b[i]; d+=t*t;} return d; }
 
 function classifyAll(){
-  // centres define the six reference colours
-  const refs = SCAN_ORDER.map(f=>feat(samples[f][4]));
-  const refFace = SCAN_ORDER.slice();
   const items=[];
   SCAN_ORDER.forEach(f=>{
     samples[f].forEach((rgb,i)=>{
-      const fi = FACE_ORDER.indexOf(f)*9 + i;
-      if(i===4){ items.push({fi, fixed: refFace.indexOf(f)}); return; }
-      items.push({fi, ft: feat(rgb)});
+      const fi=FACE_ORDER.indexOf(f)*9+i;
+      items.push({fi, ft:feat(rgb), fixed: i===4 ? SCAN_ORDER.indexOf(f) : undefined});
     });
   });
-  const cap = [9,9,9,9,9,9];
-  const assign = new Array(54).fill(-1);
-  items.forEach(it=>{ if(it.fixed!==undefined){ assign[it.fi]=it.fixed; cap[it.fixed]--; } });
-  const pairs=[];
-  items.forEach(it=>{ if(it.fixed!==undefined) return;
-    refs.forEach((rf,ri)=>pairs.push({fi:it.fi, ri, d:dist(it.ft, rf)})); });
-  pairs.sort((a,b)=>a.d-b.d);
-  for(const p of pairs){
-    if(assign[p.fi]!==-1 || cap[p.ri]<=0) continue;
-    assign[p.fi]=p.ri; cap[p.ri]--;
+  let refs = SCAN_ORDER.map(f=>feat(samples[f][4]));
+  let assign=null, margins=new Array(54).fill(1);
+  for(let round=0; round<4; round++){
+    assign=new Array(54).fill(-1);
+    const cap=[9,9,9,9,9,9];
+    items.forEach(it=>{ if(it.fixed!==undefined){ assign[it.fi]=it.fixed; cap[it.fixed]--; } });
+    const pairs=[];
+    items.forEach(it=>{
+      if(it.fixed!==undefined) return;
+      const ds=refs.map(rf=>dist(it.ft,rf));
+      const sorted=ds.slice().sort((a,b)=>a-b);
+      const margin=sorted[1]-sorted[0];
+      margins[it.fi]=margin;
+      ds.forEach((d,ri)=>pairs.push({fi:it.fi, ri, k:d-margin}));
+    });
+    pairs.sort((a,b)=>a.k-b.k);
+    for(const p of pairs){
+      if(assign[p.fi]!==-1 || cap[p.ri]<=0) continue;
+      assign[p.fi]=p.ri; cap[p.ri]--;
+    }
+    // recentre the six references on what actually got assigned, then redo
+    const sum=refs.map(()=>[0,0,0,0]), cnt=refs.map(()=>0);
+    items.forEach(it=>{ const a=assign[it.fi]; for(let j=0;j<4;j++) sum[a][j]+=it.ft[j]; cnt[a]++; });
+    const nr=sum.map((v,i)=>v.map(x=>x/cnt[i]));
+    let moved=0; for(let i=0;i<6;i++) moved+=dist(nr[i],refs[i]);
+    refs=nr;
+    if(moved<1e-7) break;
   }
-  // map each reference (a scanned centre) to a named cube colour
-  const named = nameCentres(SCAN_ORDER.map(f=>samples[f][4]));
+  unsure = new Set();
+  for(let i=0;i<54;i++) if(i%9!==4 && margins[i] < 0.0040) unsure.add(i);
+  const named=nameCentres(SCAN_ORDER.map(f=>samples[f][4]));
   const out=new Array(54);
   for(let i=0;i<54;i++) out[i]=named[assign[i]];
   return out;
@@ -610,7 +647,12 @@ function renderFaceChips(){
   const el=$('faceChips'); el.innerHTML='';
   SCAN_ORDER.forEach((f,i)=>{
     const d=document.createElement('div');
-    d.className='fchip'+(i===scanIdx?' now':'');
+    d.className='fchip'+(i===scanIdx?' now':'')+(samples[f]?' got':'');
+    d.tabIndex=0; d.setAttribute('role','button');
+    d.setAttribute('aria-label','Recapture the '+SCAN_COPY[f].t.toLowerCase());
+    const jump=()=>{ scanIdx=i; updateScanCopy(); setStatus('Redo: '+SCAN_COPY[f].t.toLowerCase()+'.',''); };
+    d.onclick=jump;
+    d.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); jump(); } };
     const m=document.createElement('div'); m.className='mini';
     for(let k=0;k<9;k++){
       const b=document.createElement('b');
@@ -628,26 +670,35 @@ function updateScanCopy(){
   $('scanTitle').textContent=SCAN_COPY[f].t;
   $('scanHow').textContent=SCAN_COPY[f].h;
   $('backBtn').disabled = scanIdx===0;
+  $('capBtn').textContent = 'Capture '+SCAN_COPY[f].t.toLowerCase().replace(' face','');
   renderFaceChips();
 }
 
 $('camBtn').onclick=startCamera;
-$('mirrorBtn').onclick=()=>{ mirrored=!mirrored; $('camstage').classList.toggle('mirror', mirrored); };
+$('mirrorBtn').onclick=()=>{ mirrored=!mirrored; $('camstage').classList.toggle('mirror', mirrored); setStatus(mirrored?'View flipped.':'View back to normal.',''); };
 function resetCamera(){
+  stopLive();
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
   video.classList.add('hidden'); $('grid9').classList.add('hidden'); $('camoff').classList.remove('hidden');
   $('camoff').textContent='Camera is off. Turn it on, or enter the colours by hand.';
   $('camBtn').textContent='Turn on camera'; $('camBtn').disabled=false; $('capBtn').disabled=true;
 }
 $('capBtn').onclick=()=>{
-  const s=sampleFace(); if(!s) return;
+  let s=null;
+  try{ s=sampleFace(); }catch(err){ setStatus('Could not read the frame: '+err.message,'bad'); return; }
+  if(!s){ setStatus('Camera is not ready yet. Give it a second.','bad'); return; }
   samples[SCAN_ORDER[scanIdx]]=s;
-  scanIdx++;
-  if(scanIdx>=6){ colors=classifyAll(); goCheck(); }
-  else updateScanCopy();
+  const fl=$('capflash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+  const missing = SCAN_ORDER.filter(f=>!samples[f]);
+  if(!missing.length){ stopLive(); colors=classifyAll(); goCheck(); return; }
+  scanIdx = SCAN_ORDER.indexOf(missing[0]);
+  updateScanCopy();
+  setStatus(6-missing.length+' of 6 captured. Now: '+SCAN_COPY[SCAN_ORDER[scanIdx]].t.toLowerCase()+'.','ok');
 };
-$('backBtn').onclick=()=>{ if(scanIdx>0){ scanIdx--; delete samples[SCAN_ORDER[scanIdx]]; updateScanCopy(); } };
+function setStatus(msg, kind){ const e=$('capStatus'); e.textContent=msg; e.className='status'+(kind?' '+kind:''); }
+$('backBtn').onclick=()=>{ if(scanIdx>0){ scanIdx--; updateScanCopy(); setStatus('Redo: '+SCAN_COPY[SCAN_ORDER[scanIdx]].t.toLowerCase()+'.',''); } };
 $('manualBtn').onclick=()=>{
+  unsure=new Set();
   if(colors.every(c=>c===null)){
     colors=new Array(54).fill(null);
     ['w','r','g','y','o','b'].forEach((c,i)=>{ colors[i*9+4]=c; });
@@ -655,6 +706,7 @@ $('manualBtn').onclick=()=>{
   goCheck();
 };
 $('demoBtn').onclick=()=>{
+  unsure=new Set();
   const letters=SOLVED.slice();
   const map={U:'y',R:'o',F:'g',D:'w',L:'r',B:'b'};
   let st=letters, last=null;
@@ -682,11 +734,11 @@ function renderNet(){
     const d=document.createElement('div'); d.className='cell';
     const s=cells[r+'_'+c];
     if(s){
-      d.className='cell st'+(s.idx%9===4?' ctr':'')+(selected===s.idx?' sel':'');
+      d.className='cell st'+(s.idx%9===4?' ctr':'')+(unsure.has(s.idx)?' ask':'')+(selected===s.idx?' sel':'');
       d.style.background = colors[s.idx] ? COL[colors[s.idx]].hex : '#0E0F12';
       d.tabIndex=0; d.setAttribute('role','button');
       d.setAttribute('aria-label', FACE_ORDER[Math.floor(s.idx/9)]+' square '+((s.idx%9)+1)+', '+(colors[s.idx]?COL[colors[s.idx]].name:'empty'));
-      const set=()=>{ colors[s.idx]=paint; selected=s.idx; renderNet(); checkNow(); };
+      const set=()=>{ colors[s.idx]=paint; selected=s.idx; unsure.delete(s.idx); renderNet(); checkNow(); };
       d.onclick=set;
       d.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); set(); } };
     }
@@ -716,11 +768,14 @@ function checkNow(){
   if(new Set(centres).size!==6){ m.className='msg bad'; m.textContent='The six centre squares must all be different colours.'; return false; }
   const err=validate(toLetters());
   if(err){ m.className='msg bad'; m.textContent=err; return false; }
-  m.className='msg ok'; m.textContent='Looks like a real cube. Ready.';
+  m.className='msg ok';
+  m.textContent = unsure.size
+    ? 'Looks like a real cube. '+unsure.size+' square'+(unsure.size>1?'s':'')+' outlined in yellow were a close call — worth a glance.'
+    : 'Looks like a real cube. Ready.';
   return true;
 }
 $('rescanBtn').onclick=()=>{ scanIdx=0; samples={}; resetCamera(); goScan(); };
-$('clearBtn').onclick=()=>{ colors=new Array(54).fill(null); ['w','r','g','y','o','b'].forEach((c,i)=>{colors[i*9+4]=c;}); renderNet(); checkNow(); };
+$('clearBtn').onclick=()=>{ unsure=new Set(); colors=new Array(54).fill(null); ['w','r','g','y','o','b'].forEach((c,i)=>{colors[i*9+4]=c;}); renderNet(); checkNow(); };
 
 /* ========================================================================
    6. 3D VIEW
@@ -906,6 +961,7 @@ function goScan(){
 function goCheck(){
   $('scanView').classList.add('hidden'); $('checkView').classList.remove('hidden'); $('learnView').classList.add('hidden');
   setPhase(2,'Check the colours');
+  stopLive();
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
   renderPal(); renderNet(); checkNow();
   window.scrollTo(0,0);
